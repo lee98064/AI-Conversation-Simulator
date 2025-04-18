@@ -38,6 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const bot2Model = document.getElementById('bot2Model');
     const bot2SystemPrompt = document.getElementById('bot2SystemPrompt');
     const initialMessage = document.getElementById('initialMessage');
+    const conversationTitle = document.getElementById('conversationTitle');
     
     // Token stats elements
     const totalTokensElement = document.getElementById('totalTokens');
@@ -119,7 +120,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         
                         const title = document.createElement('div');
                         title.className = 'conversation-title';
-                        title.textContent = `${conversation.bot1_name} & ${conversation.bot2_name}`;
+                        
+                        // 优先使用自定义标题，如果没有则显示默认格式
+                        if (conversation.title) {
+                            title.textContent = conversation.title;
+                        } else {
+                            title.textContent = `${conversation.bot1_name} & ${conversation.bot2_name}`;
+                        }
                         
                         const date = document.createElement('div');
                         date.className = 'conversation-date';
@@ -302,7 +309,10 @@ document.addEventListener('DOMContentLoaded', () => {
             bot2_system_prompt: bot2SystemPrompt.value.trim(),
             bot2_model: bot2Model.value,
             
-            initial_message: initialMessage.value.trim() || 'Hello!'
+            initial_message: initialMessage.value.trim() || 'Hello!',
+            
+            // 添加自定义对话标题
+            conversation_title: conversationTitle.value.trim() || null
         };
         
         // Clear previous conversation

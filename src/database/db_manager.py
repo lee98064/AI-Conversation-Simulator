@@ -26,6 +26,7 @@ class DatabaseManager:
         CREATE TABLE IF NOT EXISTS conversations (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             timestamp TEXT,
+            title TEXT,
             bot1_name TEXT,
             bot1_system_prompt TEXT,
             bot1_model TEXT,
@@ -53,24 +54,38 @@ class DatabaseManager:
         )
         ''')
         
+        # Check if title column exists, and add it if it doesn't
+        cursor.execute("PRAGMA table_info(conversations)")
+        columns = [column[1] for column in cursor.fetchall()]
+        
+        if 'title' not in columns:
+            cursor.execute('ALTER TABLE conversations ADD COLUMN title TEXT')
+        
         conn.commit()
         conn.close()
     
     def create_conversation(self, bot1_name, bot1_system_prompt, bot1_model, 
-                           bot2_name, bot2_system_prompt, bot2_model):
+                           bot2_name, bot2_system_prompt, bot2_model, title=None):
         """Create a new conversation and return its ID."""
         conn = self.get_connection()
         cursor = conn.cursor()
         
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
+        # 如果没有提供自定义标题，则生成默认标题
+        if not title:
+            short_timestamp = datetime.now().strftime("%Y%m%d-%H%M")
+            # 使用模型名称的简短版本
+            model_short = bot1_model.split('-')[-1] if '-' in bot1_model else bot1_model
+            title = f"{short_timestamp}-{model_short}-{bot1_name}&{bot2_name}"
+        
         cursor.execute('''
         INSERT INTO conversations 
-            (timestamp, bot1_name, bot1_system_prompt, bot1_model, 
+            (timestamp, title, bot1_name, bot1_system_prompt, bot1_model, 
              bot2_name, bot2_system_prompt, bot2_model)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
-            timestamp, bot1_name, bot1_system_prompt, bot1_model,
+            timestamp, title, bot1_name, bot1_system_prompt, bot1_model,
             bot2_name, bot2_system_prompt, bot2_model
         ))
         

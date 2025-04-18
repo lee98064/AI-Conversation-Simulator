@@ -379,10 +379,14 @@ def handle_start_conversation(data):
     
     initial_message = data.get('initial_message', 'Hello! Let\'s have a conversation.')
     
+    # 获取自定义标题（如果有提供）
+    custom_title = data.get('conversation_title')
+    
     # Create a new conversation in database
     conversation_id = db_manager.create_conversation(
         bot1_name, bot1_system_prompt, bot1_model,
-        bot2_name, bot2_system_prompt, bot2_model
+        bot2_name, bot2_system_prompt, bot2_model,
+        title=custom_title  # 传递自定义标题
     )
     
     # Start conversation thread
