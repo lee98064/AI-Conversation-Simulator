@@ -536,25 +536,73 @@ def run_conversation(
             
             # 检查是否为o1系列模型，它们使用不同的参数
             if responding_model.startswith("o1"):
-                # o1模型不支持temperature和max_tokens参数
-                response = openai.chat.completions.create(
-                    model=responding_model,
-                    messages=messages,
-                    max_completion_tokens=1000
-                )
+                # o1模型需要特殊处理，增加token限制并处理流式响应
+                try:
+                    # 使用流式响应模式，确保获取完整回复
+                    stream_response = openai.chat.completions.create(
+                        model=responding_model,
+                        messages=messages,
+                        max_completion_tokens=4000,  # 增加token限制
+                        stream=True  # 启用流式响应
+                    )
+                    
+                    # 收集完整的回复内容
+                    collected_response = ""
+                    for chunk in stream_response:
+                        if chunk.choices and chunk.choices[0].delta.content:
+                            collected_response += chunk.choices[0].delta.content
+                    
+                    # 如果流式响应收集到的内容为空，尝试非流式方式
+                    if not collected_response:
+                        print(f"流式响应为空，尝试非流式方式...")
+                        response = openai.chat.completions.create(
+                            model=responding_model,
+                            messages=messages,
+                            max_completion_tokens=4000
+                        )
+                        reply = response.choices[0].message.content
+                        prompt_tokens = response.usage.prompt_tokens
+                        completion_tokens = response.usage.completion_tokens
+                        total_tokens = response.usage.total_tokens
+                    else:
+                        # 使用流式收集的响应，需要额外查询token使用情况
+                        reply = collected_response
+                        # 获取token使用情况
+                        token_check_response = openai.chat.completions.create(
+                            model=responding_model,
+                            messages=messages,
+                            max_completion_tokens=4000
+                        )
+                        prompt_tokens = token_check_response.usage.prompt_tokens
+                        completion_tokens = token_check_response.usage.completion_tokens
+                        total_tokens = token_check_response.usage.total_tokens
+                
+                except Exception as e:
+                    print(f"流式处理失败: {e}，尝试标准方式...")
+                    # 如果流式处理失败，回退到标准方式
+                    response = openai.chat.completions.create(
+                        model=responding_model,
+                        messages=messages,
+                        max_completion_tokens=4000
+                    )
+                    reply = response.choices[0].message.content
+                    prompt_tokens = response.usage.prompt_tokens
+                    completion_tokens = response.usage.completion_tokens
+                    total_tokens = response.usage.total_tokens
             else:
+                # 非o1模型使用标准方式
                 response = openai.chat.completions.create(
                     model=responding_model,
                     messages=messages,
                     temperature=0.7,
                     max_tokens=1000
                 )
-            
-            # Extract response text and token usage
-            reply = response.choices[0].message.content
-            prompt_tokens = response.usage.prompt_tokens
-            completion_tokens = response.usage.completion_tokens
-            total_tokens = response.usage.total_tokens
+                
+                # Extract response text and token usage
+                reply = response.choices[0].message.content
+                prompt_tokens = response.usage.prompt_tokens
+                completion_tokens = response.usage.completion_tokens
+                total_tokens = response.usage.total_tokens
             
             print(f"{responding_bot} 回應 ({total_tokens} tokens): {reply[:30]}...")  # 調試日誌
             
