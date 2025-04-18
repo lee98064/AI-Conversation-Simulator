@@ -269,6 +269,16 @@ document.addEventListener('DOMContentLoaded', () => {
         isConversationActive = false;
         updateButtonStates();
         
+        // Reset token statistics display
+        totalTokensElement.textContent = '0';
+        totalCostElement.textContent = 'NT$ 0.00';
+        bot1StatsNameElement.textContent = 'Bot 1';
+        bot1TokensElement.textContent = '0';
+        bot1CostElement.textContent = 'NT$ 0.00';
+        bot2StatsNameElement.textContent = 'Bot 2';
+        bot2TokensElement.textContent = '0';
+        bot2CostElement.textContent = 'NT$ 0.00';
+        
         // Reset bot configuration to defaults if needed
         // bot1Name.value = 'Bot 1';
         // bot1SystemPrompt.value = '您是一個有用的AI助手。請用中文回答問題。';
@@ -315,9 +325,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function togglePause() {
-        if (!isConversationActive && !pauseBtn.textContent.includes('繼續')) return;
+        // 簡化邏輯判斷，確保按鈕功能穩定
+        if (pauseBtn.disabled) return;
         
-        if (pauseBtn.textContent.includes('暫停')) {
+        if (isConversationActive) {
             socket.emit('pause_conversation', (response) => {
                 if (response && response.status === 'success') {
                     isConversationActive = false;
@@ -370,20 +381,35 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function addMessage(botName, text, timestamp) {
+        console.log('Adding message:', botName, text.substring(0, 30) + '...', timestamp); // 增加調試日誌
+        
         const messageEl = document.createElement('div');
-        messageEl.className = `message ${botName === bot1Name.value ? 'bot1' : 'bot2'}`;
+        // 修正判斷邏輯，確保正確分配bot1或bot2樣式
+        messageEl.className = 'message';
+        if (botName === bot1Name.value || (bot1Name.value === '' && botName === 'Bot 1')) {
+            messageEl.classList.add('bot1');
+        } else {
+            messageEl.classList.add('bot2');
+        }
         
         const headerEl = document.createElement('div');
         headerEl.className = 'message-header';
-        headerEl.innerHTML = `<strong>${botName}</strong><span>${timestamp}</span>`;
+        headerEl.innerHTML = `<strong>${botName}</strong><span>${timestamp || new Date().toLocaleString()}</span>`;
         
         const contentEl = document.createElement('div');
         contentEl.className = 'message-content';
-        contentEl.textContent = text;
+        
+        // 支持顯示換行
+        contentEl.innerText = text;
         
         messageEl.appendChild(headerEl);
         messageEl.appendChild(contentEl);
         conversationEl.appendChild(messageEl);
+        
+        // 確保消息顯示後立即滾動到底部，強制使用requestAnimationFrame確保UI更新
+        requestAnimationFrame(() => {
+            scrollToBottom();
+        });
     }
     
     function setStatus(message, isError = false) {
@@ -392,19 +418,33 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function updateButtonStates() {
+        // 修正按鈕狀態邏輯，確保暫停後可以重新開始對話
         startBtn.disabled = isConversationActive;
-        pauseBtn.disabled = !isConversationActive;
+        pauseBtn.disabled = !activeConversationId; // 只要有對話ID，就能暫停/繼續
         
+        // 表單元素禁用邏輯
         bot1Name.disabled = isConversationActive;
         bot1Model.disabled = isConversationActive;
         bot2Name.disabled = isConversationActive;
         bot2Model.disabled = isConversationActive;
         initialMessage.disabled = isConversationActive;
+        
+        // 更新暫停/繼續按鈕文字
+        if (isConversationActive) {
+            pauseBtn.innerHTML = '<i class="fas fa-pause"></i> 暫停';
+        } else if (activeConversationId) {
+            pauseBtn.innerHTML = '<i class="fas fa-play"></i> 繼續';
+        }
     }
     
     function scrollToBottom() {
         const container = document.querySelector('.conversation-container');
-        container.scrollTop = container.scrollHeight;
+        if (container) {
+            // 使用setTimeout確保在DOM完全更新後執行滾動
+            setTimeout(() => {
+                container.scrollTop = container.scrollHeight;
+            }, 0);
+        }
     }
 
     // Update token stats in the UI

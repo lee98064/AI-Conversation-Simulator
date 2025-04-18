@@ -30,7 +30,14 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv("SECRET_KEY", "default_secret_key")
 CORS(app)
-socketio = SocketIO(app, cors_allowed_origins="*")
+# 更新 Socket.IO 配置，解決即時更新問題
+socketio = SocketIO(app, 
+                   cors_allowed_origins="*", 
+                   async_mode='threading',  # 改為 threading 模式以提高穩定性
+                   ping_timeout=60,        # 增加超時設定
+                   ping_interval=25,       # 增加ping間隔
+                   engineio_logger=True,   # 啟用引擎日誌以便調試
+                   logger=True)            # 啟用主日誌
 
 # Initialize database
 db_manager = DatabaseManager()
@@ -393,45 +400,85 @@ def handle_start_conversation(data):
 @socketio.on('pause_conversation')
 def handle_pause_conversation(data=None):
     global conversation_active
+    
+    print("暫停對話請求已接收")  # 增加調試信息
     conversation_active = False
+    time.sleep(0.5)  # 確保暫停狀態已設置
     return {"status": "success", "message": "Conversation paused"}
 
 @socketio.on('resume_conversation')
 def handle_resume_conversation(data=None):
     global conversation_active, conversation_thread, conversation_id
     
-    if conversation_thread and conversation_thread.is_alive():
+    print("繼續對話請求已接收")  # 增加調試信息
+    
+    # 檢查 conversation_id 是否存在
+    if not conversation_id:
+        return {"status": "error", "message": "No active conversation ID"}
+        
+    # 如果線程已經結束，重新啟動
+    if conversation_thread and not conversation_thread.is_alive():
+        # 獲取最後對話的配置
+        convo = db_manager.get_conversation_by_id(conversation_id)
+        if not convo:
+            return {"status": "error", "message": "Conversation not found"}
+            
+        # 重新啟動對話線程
+        conversation_active = True
+        conversation_thread = threading.Thread(
+            target=resume_conversation_thread,
+            args=(conversation_id,)
+        )
+        conversation_thread.daemon = True
+        conversation_thread.start()
+        return {"status": "success", "message": "Conversation restarted"}
+    else:
+        # 簡單地恢復現有對話
         conversation_active = True
         return {"status": "success", "message": "Conversation resumed"}
-    
-    return {"status": "error", "message": "No conversation to resume"}
 
-@socketio.on('update_system_prompts')
-def handle_update_system_prompts(data):
+# 添加一個新函數用於恢復對話
+def resume_conversation_thread(conv_id):
+    """重新啟動一個已經暫停的對話"""
     global conversation_active
     
-    if not conversation_active:
-        return {"status": "error", "message": "No active conversation to update"}
+    # 獲取對話配置
+    convo = db_manager.get_conversation_by_id(conv_id)
+    if not convo:
+        socketio.emit('error', {'message': f"Error: Conversation {conv_id} not found"})
+        return
+        
+    # 獲取最後一則消息
+    messages = db_manager.get_messages_by_conversation_id(conv_id)
+    if not messages:
+        socketio.emit('error', {'message': f"Error: No messages in conversation {conv_id}"})
+        return
+        
+    last_message = messages[-1]
     
-    bot1_system_prompt = data.get('bot1_system_prompt')
-    bot2_system_prompt = data.get('bot2_system_prompt')
-    
-    # Update in database
-    db_manager.update_bot_system_prompts(
-        conversation_id, 
-        bot1_system_prompt, 
-        bot2_system_prompt
+    # 恢復對話
+    run_conversation(
+        conv_id,
+        convo['bot1_name'], 
+        convo['bot1_system_prompt'], 
+        convo['bot1_model'],
+        convo['bot2_name'], 
+        convo['bot2_system_prompt'], 
+        convo['bot2_model'],
+        last_message['content'],
+        is_resuming=True
     )
-    
-    return {"status": "success", "message": "System prompts updated"}
 
 def run_conversation(
     conv_id, 
     bot1_name, bot1_system_prompt, bot1_model,
     bot2_name, bot2_system_prompt, bot2_model,
-    initial_message
+    initial_message,
+    is_resuming=False
 ):
     global conversation_active
+    
+    print(f"啟動對話 ID:{conv_id}, 初始訊息:{initial_message[:20]}...")  # 調試日誌
     
     # Initialize conversation history for each bot
     bot1_messages = [{"role": "system", "content": bot1_system_prompt}]
@@ -439,22 +486,31 @@ def run_conversation(
     
     # Start with initial message from Bot 1
     current_message = initial_message
-    current_bot = "bot1"
+    current_bot = "bot1" if not is_resuming else "bot2"  # 如果是恢復對話，從bot2開始
     
     # Add initial message to database with zero tokens (it's not from API)
-    db_manager.add_message_with_tokens(conv_id, bot1_name, current_message, 0, 0, 0)
+    if not is_resuming:
+        db_manager.add_message_with_tokens(conv_id, bot1_name, current_message, 0, 0, 0)
     
-    # Emit initial message to frontend
-    socketio.emit('new_message', {
-        'bot': bot1_name,
-        'message': current_message,
-        'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        'tokens': 0,
-        'cost': 0
-    })
+        # 只有在新對話時才發送初始消息
+        socketio.emit('new_message', {
+            'bot': bot1_name,
+            'message': current_message,
+            'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            'tokens': 0,
+            'cost': 0
+        })
     
     # Emit token stats update
     token_stats = db_manager.get_conversation_token_stats(conv_id)
+    # 確保在發送前轉換Decimal對象
+    if token_stats:
+        token_stats['total_cost'] = float(token_stats['total_cost'])
+        if 'bot_stats' in token_stats:
+            for bot_name in token_stats['bot_stats']:
+                if 'cost' in token_stats['bot_stats'][bot_name]:
+                    token_stats['bot_stats'][bot_name]['cost'] = float(token_stats['bot_stats'][bot_name]['cost'])
+    
     socketio.emit('token_stats_update', token_stats)
     
     # Main conversation loop
@@ -472,6 +528,8 @@ def run_conversation(
                 messages = bot1_messages + [{"role": "user", "content": current_message}]
                 next_bot = "bot1"
             
+            print(f"請求 {responding_bot} 使用 {responding_model} 回應...")  # 調試日誌
+            
             # Get response from OpenAI API
             response = openai.chat.completions.create(
                 model=responding_model,
@@ -485,6 +543,8 @@ def run_conversation(
             prompt_tokens = response.usage.prompt_tokens
             completion_tokens = response.usage.completion_tokens
             total_tokens = response.usage.total_tokens
+            
+            print(f"{responding_bot} 回應 ({total_tokens} tokens): {reply[:30]}...")  # 調試日誌
             
             # Calculate cost
             cost = cost_calculator.calculate_cost(responding_model, prompt_tokens, completion_tokens)
@@ -507,8 +567,8 @@ def run_conversation(
                 float(cost)  # Convert Decimal to float for SQLite compatibility
             )
             
-            # Emit message to frontend
-            socketio.emit('new_message', {
+            # 構造消息事件數據
+            event_data = {
                 'bot': responding_bot,
                 'message': reply,
                 'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -516,10 +576,22 @@ def run_conversation(
                 'completion_tokens': completion_tokens,
                 'total_tokens': total_tokens,
                 'cost': float(cost)  # Convert Decimal to float for JSON serialization
-            })
+            }
+            
+            # 確保事件數據不包含無法JSON序列化的內容
+            print(f"發送消息事件: {responding_bot}, {total_tokens} tokens")
+            socketio.emit('new_message', event_data)
             
             # Emit updated token stats
             token_stats = db_manager.get_conversation_token_stats(conv_id)
+            # 確保在發送前轉換Decimal對象
+            if token_stats:
+                token_stats['total_cost'] = float(token_stats['total_cost'])
+                if 'bot_stats' in token_stats:
+                    for bot_name in token_stats['bot_stats']:
+                        if 'cost' in token_stats['bot_stats'][bot_name]:
+                            token_stats['bot_stats'][bot_name]['cost'] = float(token_stats['bot_stats'][bot_name]['cost'])
+            
             socketio.emit('token_stats_update', token_stats)
             
             # Update current message and bot for next iteration
@@ -530,8 +602,9 @@ def run_conversation(
             time.sleep(1)
             
         except Exception as e:
-            print(f"Error in conversation: {str(e)}")
-            socketio.emit('error', {'message': f"Error: {str(e)}"})
+            error_msg = f"Error in conversation: {str(e)}"
+            print(error_msg)
+            socketio.emit('error', {'message': error_msg})
             break
 
 if __name__ == '__main__':
