@@ -3,16 +3,32 @@ document.addEventListener('DOMContentLoaded', () => {
     const socket = io();
     let activeConversationId = null;
     let isConversationActive = false;
+    let currentConversationDetails = null;
 
     // DOM Elements
     const startBtn = document.getElementById('startBtn');
     const pauseBtn = document.getElementById('pauseBtn');
     const exportCSVBtn = document.getElementById('exportCSVBtn');
     const exportTXTBtn = document.getElementById('exportTXTBtn');
+    const newConversationBtn = document.getElementById('newConversationBtn');
+    const conversationsList = document.getElementById('conversationsList');
     const conversationEl = document.getElementById('conversation');
     const statusMessage = document.getElementById('statusMessage');
     const connectionStatus = document.getElementById('connectionStatus');
     const connectionIndicator = document.getElementById('connectionIndicator');
+    
+    // Modal elements
+    const modal = document.getElementById('conversationDetailsModal');
+    const closeModal = document.querySelector('.close-modal');
+    const modalTimestamp = document.getElementById('modalTimestamp');
+    const modalBot1Name = document.getElementById('modalBot1Name');
+    const modalBot1Model = document.getElementById('modalBot1Model');
+    const modalBot1SystemPrompt = document.getElementById('modalBot1SystemPrompt');
+    const modalBot2Name = document.getElementById('modalBot2Name');
+    const modalBot2Model = document.getElementById('modalBot2Model');
+    const modalBot2SystemPrompt = document.getElementById('modalBot2SystemPrompt');
+    const loadConversationBtn = document.getElementById('loadConversationBtn');
+    const deleteConversationBtn = document.getElementById('deleteConversationBtn');
     
     // Bot settings fields
     const bot1Name = document.getElementById('bot1Name');
@@ -22,6 +38,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const bot2Model = document.getElementById('bot2Model');
     const bot2SystemPrompt = document.getElementById('bot2SystemPrompt');
     const initialMessage = document.getElementById('initialMessage');
+    
+    // Load conversations on page load
+    loadConversations();
     
     // Socket event handlers
     socket.on('connect', () => {
@@ -54,12 +73,188 @@ document.addEventListener('DOMContentLoaded', () => {
     pauseBtn.addEventListener('click', togglePause);
     exportCSVBtn.addEventListener('click', () => exportConversation('csv'));
     exportTXTBtn.addEventListener('click', () => exportConversation('txt'));
+    newConversationBtn.addEventListener('click', resetConversation);
+    
+    // Modal event handlers
+    closeModal.addEventListener('click', () => modal.style.display = 'none');
+    window.addEventListener('click', (event) => {
+        if (event.target === modal) {
+            modal.style.display = 'none';
+        }
+    });
+    loadConversationBtn.addEventListener('click', loadSelectedConversation);
+    deleteConversationBtn.addEventListener('click', deleteSelectedConversation);
     
     // Changes to system prompts during active conversation
     bot1SystemPrompt.addEventListener('change', updateSystemPrompts);
     bot2SystemPrompt.addEventListener('change', updateSystemPrompts);
     
     // Functions
+    function loadConversations() {
+        fetch('/api/conversations')
+            .then(response => response.json())
+            .then(data => {
+                conversationsList.innerHTML = '';
+                if (data.conversations && data.conversations.length > 0) {
+                    data.conversations.forEach(conversation => {
+                        const item = document.createElement('div');
+                        item.className = 'conversation-item';
+                        item.dataset.id = conversation.id;
+                        
+                        const title = document.createElement('div');
+                        title.className = 'conversation-title';
+                        title.textContent = `${conversation.bot1_name} & ${conversation.bot2_name}`;
+                        
+                        const date = document.createElement('div');
+                        date.className = 'conversation-date';
+                        date.textContent = conversation.timestamp;
+                        
+                        item.appendChild(title);
+                        item.appendChild(date);
+                        
+                        item.addEventListener('click', () => openConversationDetails(conversation));
+                        
+                        conversationsList.appendChild(item);
+                    });
+                } else {
+                    const noConversations = document.createElement('div');
+                    noConversations.className = 'no-conversations';
+                    noConversations.textContent = '還沒有對話記錄';
+                    conversationsList.appendChild(noConversations);
+                }
+            })
+            .catch(error => {
+                console.error('Failed to load conversations:', error);
+                setStatus('載入對話歷史失敗', true);
+            });
+    }
+    
+    function openConversationDetails(conversation) {
+        currentConversationDetails = conversation;
+        
+        modalTimestamp.textContent = conversation.timestamp;
+        modalBot1Name.textContent = conversation.bot1_name;
+        modalBot1Model.textContent = conversation.bot1_model;
+        modalBot1SystemPrompt.textContent = conversation.bot1_system_prompt;
+        
+        modalBot2Name.textContent = conversation.bot2_name;
+        modalBot2Model.textContent = conversation.bot2_model;
+        modalBot2SystemPrompt.textContent = conversation.bot2_system_prompt;
+        
+        modal.style.display = 'block';
+    }
+    
+    function loadSelectedConversation() {
+        if (!currentConversationDetails) return;
+        
+        const conversationId = currentConversationDetails.id;
+        
+        // Reset current conversation state
+        if (isConversationActive) {
+            socket.emit('pause_conversation', (response) => {
+                resetConversationUI();
+                loadConversationMessages(conversationId);
+            });
+        } else {
+            resetConversationUI();
+            loadConversationMessages(conversationId);
+        }
+        
+        // Update form fields with conversation settings
+        bot1Name.value = currentConversationDetails.bot1_name;
+        bot1SystemPrompt.value = currentConversationDetails.bot1_system_prompt;
+        bot1Model.value = currentConversationDetails.bot1_model;
+        
+        bot2Name.value = currentConversationDetails.bot2_name;
+        bot2SystemPrompt.value = currentConversationDetails.bot2_system_prompt;
+        bot2Model.value = currentConversationDetails.bot2_model;
+        
+        // Close the modal
+        modal.style.display = 'none';
+    }
+    
+    function loadConversationMessages(conversationId) {
+        fetch(`/api/conversation/${conversationId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.messages && data.messages.length > 0) {
+                    conversationEl.innerHTML = '';
+                    
+                    data.messages.forEach(message => {
+                        addMessage(message.bot_name, message.content, message.timestamp);
+                    });
+                    
+                    scrollToBottom();
+                    activeConversationId = conversationId;
+                    setStatus(`已載入對話 (ID: ${conversationId})`);
+                }
+            })
+            .catch(error => {
+                console.error('Failed to load conversation messages:', error);
+                setStatus('載入對話訊息失敗', true);
+            });
+    }
+    
+    function deleteSelectedConversation() {
+        if (!currentConversationDetails) return;
+        
+        const conversationId = currentConversationDetails.id;
+        
+        if (confirm(`確定要刪除這個對話嗎？此操作無法撤銷。`)) {
+            fetch(`/api/conversation/${conversationId}`, {
+                method: 'DELETE'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    setStatus(`對話已刪除 (ID: ${conversationId})`);
+                    loadConversations();
+                    
+                    // If currently viewing the deleted conversation, reset the UI
+                    if (activeConversationId === conversationId) {
+                        resetConversationUI();
+                    }
+                    
+                    modal.style.display = 'none';
+                } else {
+                    setStatus(`刪除對話失敗: ${data.error || '未知錯誤'}`, true);
+                }
+            })
+            .catch(error => {
+                console.error('Failed to delete conversation:', error);
+                setStatus('刪除對話失敗', true);
+            });
+        }
+    }
+    
+    function resetConversation() {
+        if (isConversationActive) {
+            if (confirm('目前對話尚在進行中，確定要開始新對話嗎？')) {
+                socket.emit('pause_conversation', (response) => {
+                    resetConversationUI();
+                });
+            }
+        } else {
+            resetConversationUI();
+        }
+    }
+    
+    function resetConversationUI() {
+        conversationEl.innerHTML = '';
+        activeConversationId = null;
+        isConversationActive = false;
+        updateButtonStates();
+        
+        // Reset bot configuration to defaults if needed
+        // bot1Name.value = 'Bot 1';
+        // bot1SystemPrompt.value = '您是一個有用的AI助手。請用中文回答問題。';
+        // bot2Name.value = 'Bot 2';
+        // bot2SystemPrompt.value = '您是一個有用的AI助手，擅長問有深度的問題。請用中文回答。';
+        // initialMessage.value = '你好！讓我們開始對話吧。';
+        
+        setStatus('已準備好新對話');
+    }
+    
     function startConversation() {
         if (isConversationActive) return;
         
@@ -86,6 +281,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 isConversationActive = true;
                 setStatus(`對話已開始 (ID: ${activeConversationId})`);
                 updateButtonStates();
+                
+                // Refresh the conversations list
+                loadConversations();
             } else {
                 setStatus(`無法開始對話: ${response?.message || '未知錯誤'}`, true);
             }

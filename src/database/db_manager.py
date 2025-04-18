@@ -169,3 +169,31 @@ class DatabaseManager:
             conn.commit()
         
         conn.close()
+    
+    def delete_conversation(self, conversation_id):
+        """Delete a conversation and all its messages."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            # Start a transaction
+            conn.execute('BEGIN TRANSACTION')
+            
+            # Delete all messages related to this conversation
+            cursor.execute('DELETE FROM messages WHERE conversation_id = ?', (conversation_id,))
+            
+            # Delete the conversation
+            cursor.execute('DELETE FROM conversations WHERE id = ?', (conversation_id,))
+            
+            # Commit the transaction
+            conn.execute('COMMIT')
+            success = True
+        except Exception as e:
+            # Roll back in case of error
+            conn.execute('ROLLBACK')
+            print(f"Error deleting conversation: {e}")
+            success = False
+        finally:
+            conn.close()
+        
+        return success

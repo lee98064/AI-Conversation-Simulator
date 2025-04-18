@@ -65,6 +65,13 @@ def get_conversation(conv_id):
         return jsonify({"conversation": conversation, "messages": messages})
     return jsonify({"error": "Conversation not found"}), 404
 
+@app.route('/api/conversation/<int:conv_id>', methods=['DELETE'])
+def delete_conversation(conv_id):
+    success = db_manager.delete_conversation(conv_id)
+    if success:
+        return jsonify({"status": "success", "message": f"Conversation {conv_id} deleted"})
+    return jsonify({"error": "Failed to delete conversation"}), 500
+
 @app.route('/api/conversation/<int:conv_id>/export', methods=['GET'])
 def export_conversation(conv_id):
     format_type = request.args.get('format', 'csv')
