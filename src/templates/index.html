@@ -19,7 +19,7 @@
             </div>
         </div>
 
-        <div class="container">
+        <div class="main-content">
             <header>
                 <h1>AI 對話模擬器</h1>
                 <div class="controls">
@@ -30,59 +30,100 @@
                 </div>
             </header>
             
-            <div class="setup-panel">
-                <div class="bot-config">
-                    <div class="bot-config-card">
-                        <h2>Bot 1 設定</h2>
-                        <div class="form-group">
-                            <label for="bot1Name">名稱</label>
-                            <input type="text" id="bot1Name" value="Bot 1">
+            <div class="split-container">
+                <div class="setup-panel">
+                    <div class="bot-config">
+                        <div class="bot-config-card">
+                            <h2>Bot 1 設定</h2>
+                            <div class="form-group">
+                                <label for="bot1Name">名稱</label>
+                                <input type="text" id="bot1Name" value="Bot 1">
+                            </div>
+                            <div class="form-group">
+                                <label for="bot1Model">模型</label>
+                                <select id="bot1Model">
+                                    {% for model in models %}
+                                    <option value="{{ model }}">{{ model }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="bot1SystemPrompt">系統提示詞</label>
+                                <textarea id="bot1SystemPrompt" rows="5">您是一個有用的AI助手。請用中文回答問題。</textarea>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label for="bot1Model">模型</label>
-                            <select id="bot1Model">
-                                {% for model in models %}
-                                <option value="{{ model }}">{{ model }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="bot1SystemPrompt">系統提示詞</label>
-                            <textarea id="bot1SystemPrompt" rows="5">您是一個有用的AI助手。請用中文回答問題。</textarea>
+                        
+                        <div class="bot-config-card">
+                            <h2>Bot 2 設定</h2>
+                            <div class="form-group">
+                                <label for="bot2Name">名稱</label>
+                                <input type="text" id="bot2Name" value="Bot 2">
+                            </div>
+                            <div class="form-group">
+                                <label for="bot2Model">模型</label>
+                                <select id="bot2Model">
+                                    {% for model in models %}
+                                    <option value="{{ model }}">{{ model }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="bot2SystemPrompt">系統提示詞</label>
+                                <textarea id="bot2SystemPrompt" rows="5">您是一個有用的AI助手，擅長問有深度的問題。請用中文回答。</textarea>
+                            </div>
                         </div>
                     </div>
                     
-                    <div class="bot-config-card">
-                        <h2>Bot 2 設定</h2>
+                    <div class="initial-message-section">
                         <div class="form-group">
-                            <label for="bot2Name">名稱</label>
-                            <input type="text" id="bot2Name" value="Bot 2">
+                            <label for="initialMessage">初始訊息</label>
+                            <textarea id="initialMessage" rows="3">你好！讓我們開始對話吧。</textarea>
                         </div>
-                        <div class="form-group">
-                            <label for="bot2Model">模型</label>
-                            <select id="bot2Model">
-                                {% for model in models %}
-                                <option value="{{ model }}">{{ model }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="bot2SystemPrompt">系統提示詞</label>
-                            <textarea id="bot2SystemPrompt" rows="5">您是一個有用的AI助手，擅長問有深度的問題。請用中文回答。</textarea>
+                    </div>
+
+                    <div class="token-info-panel">
+                        <h3>Token 與費用統計</h3>
+                        <div class="token-stats">
+                            <div class="stat-item">
+                                <div class="stat-label">總 Token 數:</div>
+                                <div id="totalTokens" class="stat-value">0</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-label">總費用 (TWD):</div>
+                                <div id="totalCost" class="stat-value">NT$ 0.00</div>
+                            </div>
+                            <hr>
+                            <div class="stat-breakdown">
+                                <div class="bot-stat">
+                                    <h4 id="bot1StatsName">Bot 1</h4>
+                                    <div class="stat-row">
+                                        <span>Token 數:</span>
+                                        <span id="bot1Tokens">0</span>
+                                    </div>
+                                    <div class="stat-row">
+                                        <span>費用:</span>
+                                        <span id="bot1Cost">NT$ 0.00</span>
+                                    </div>
+                                </div>
+                                <div class="bot-stat">
+                                    <h4 id="bot2StatsName">Bot 2</h4>
+                                    <div class="stat-row">
+                                        <span>Token 數:</span>
+                                        <span id="bot2Tokens">0</span>
+                                    </div>
+                                    <div class="stat-row">
+                                        <span>費用:</span>
+                                        <span id="bot2Cost">NT$ 0.00</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
                 
-                <div class="initial-message-section">
-                    <div class="form-group">
-                        <label for="initialMessage">初始訊息</label>
-                        <textarea id="initialMessage" rows="3">你好！讓我們開始對話吧。</textarea>
-                    </div>
+                <div class="conversation-container">
+                    <div id="conversation" class="conversation"></div>
                 </div>
-            </div>
-            
-            <div class="conversation-container">
-                <div id="conversation" class="conversation"></div>
             </div>
         </div>
     </div>
@@ -117,6 +158,19 @@
                             <p><strong>模型:</strong> <span id="modalBot2Model"></span></p>
                             <p><strong>系統提示詞:</strong></p>
                             <pre id="modalBot2SystemPrompt" class="system-prompt-display"></pre>
+                        </div>
+                    </div>
+                    <div class="token-cost-info">
+                        <h3>Token 與費用</h3>
+                        <div class="token-cost-grid">
+                            <div class="token-cost-row">
+                                <span>總 Token 數:</span>
+                                <span id="modalTotalTokens">0</span>
+                            </div>
+                            <div class="token-cost-row">
+                                <span>總費用:</span>
+                                <span id="modalTotalCost">NT$ 0.00</span>
+                            </div>
                         </div>
                     </div>
                 </div>

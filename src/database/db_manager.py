@@ -31,7 +31,9 @@ class DatabaseManager:
             bot1_model TEXT,
             bot2_name TEXT,
             bot2_system_prompt TEXT,
-            bot2_model TEXT
+            bot2_model TEXT,
+            total_tokens INTEGER DEFAULT 0,
+            total_cost REAL DEFAULT 0.0
         )
         ''')
         
@@ -43,6 +45,10 @@ class DatabaseManager:
             timestamp TEXT,
             bot_name TEXT,
             content TEXT,
+            prompt_tokens INTEGER DEFAULT 0,
+            completion_tokens INTEGER DEFAULT 0,
+            total_tokens INTEGER DEFAULT 0,
+            cost REAL DEFAULT 0.0,
             FOREIGN KEY (conversation_id) REFERENCES conversations (id)
         )
         ''')
@@ -92,6 +98,72 @@ class DatabaseManager:
         conn.commit()
         conn.close()
     
+    def add_message_with_tokens(self, conversation_id, bot_name, content, prompt_tokens, completion_tokens, cost):
+        """Add a new message to an existing conversation with token usage data."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        total_tokens = prompt_tokens + completion_tokens
+        
+        cursor.execute('''
+        INSERT INTO messages 
+            (conversation_id, timestamp, bot_name, content, prompt_tokens, completion_tokens, total_tokens, cost)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (conversation_id, timestamp, bot_name, content, prompt_tokens, completion_tokens, total_tokens, cost))
+        
+        # Update the conversation's total tokens and cost
+        cursor.execute('''
+        UPDATE conversations
+        SET total_tokens = total_tokens + ?,
+            total_cost = total_cost + ?
+        WHERE id = ?
+        ''', (total_tokens, cost, conversation_id))
+        
+        conn.commit()
+        conn.close()
+
+    def get_conversation_token_stats(self, conversation_id):
+        """Get token usage statistics for a specific conversation."""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        # Get the total stats from conversation
+        cursor.execute('SELECT total_tokens, total_cost FROM conversations WHERE id = ?', (conversation_id,))
+        conv_row = cursor.fetchone()
+        
+        if not conv_row:
+            conn.close()
+            return None
+        
+        # Get bot specific stats
+        cursor.execute('''
+        SELECT bot_name, SUM(prompt_tokens) as prompt_tokens, 
+               SUM(completion_tokens) as completion_tokens, 
+               SUM(total_tokens) as total_tokens,
+               SUM(cost) as cost
+        FROM messages
+        WHERE conversation_id = ?
+        GROUP BY bot_name
+        ''', (conversation_id,))
+        
+        bot_stats = {}
+        for row in cursor.fetchall():
+            bot_stats[row['bot_name']] = {
+                'prompt_tokens': row['prompt_tokens'],
+                'completion_tokens': row['completion_tokens'],
+                'total_tokens': row['total_tokens'],
+                'cost': row['cost']
+            }
+        
+        conn.close()
+        
+        return {
+            'total_tokens': conv_row['total_tokens'],
+            'total_cost': conv_row['total_cost'],
+            'bot_stats': bot_stats
+        }
+
     def get_all_conversations(self):
         """Get all conversations."""
         conn = self.get_connection()

@@ -21,13 +21,18 @@
     padding: 0;
 }
 
+html, body {
+    height: 100%;
+    width: 100%;
+    overflow-x: hidden;  /* 防止水平滾動 */
+}
+
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     line-height: 1.6;
     color: var(--text-color);
     background-color: var(--light-bg);
-    padding: 20px;
-    min-height: 100vh;
+    padding: 0;  /* 移除padding以確保全屏顯示 */
     display: flex;
     flex-direction: column;
 }
@@ -35,7 +40,8 @@ body {
 .app-container {
     display: flex;
     width: 100%;
-    min-height: 100vh;
+    height: 100vh;  /* 使用viewport高度取代min-height */
+    overflow: hidden;  /* 防止容器產生滾動條 */
 }
 
 .sidebar {
@@ -48,6 +54,7 @@ body {
     position: fixed;
     left: 0;
     overflow-y: auto;
+    z-index: 10;
 }
 
 .sidebar-header {
@@ -105,8 +112,17 @@ body {
     color: #ddd;
 }
 
-.container {
+.main-content {
+    margin-left: var(--sidebar-width);
     width: calc(100% - var(--sidebar-width));
+    display: flex;
+    flex-direction: column;
+    height: 100vh;  /* 確保高度適配視窗 */
+    overflow: hidden;  /* 防止整體出現滾動條 */
+}
+
+.container {
+    width: 100%;
     background: #fff;
     border-radius: 10px;
     box-shadow: var(--shadow);
@@ -115,16 +131,47 @@ body {
     display: flex;
     flex-direction: column;
     margin: auto;
-    margin-left: var(--sidebar-width);
+}
+
+.split-container {
+    display: flex;
+    height: calc(100vh - 80px);  /* 減少高度，給header和status bar預留空間 */
+    overflow: hidden;
+}
+
+.setup-panel {
+    width: 40%;
+    background-color: var(--light-bg);
+    border-right: 1px solid var(--border-color);
+    padding: 15px;  /* 減少內邊距 */
+    overflow-y: auto;
+    overflow-x: hidden;  /* 防止水平滾動 */
+}
+
+.conversation-container {
+    width: 60%;
+    overflow-y: auto;
+    overflow-x: hidden;  /* 防止水平滾動 */
+    padding: 15px;  /* 減少內邊距 */
+    height: 100%;
+}
+
+.conversation {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    width: 100%;
+    word-wrap: break-word;  /* 確保長文字換行 */
 }
 
 header {
     background-color: var(--primary-color);
     color: var(--light-text);
-    padding: 20px;
+    padding: 10px 20px;  /* 減少padding */
     display: flex;
     justify-content: space-between;
     align-items: center;
+    min-height: 60px;  /* 設置最小高度 */
 }
 
 header h1 {
@@ -189,12 +236,6 @@ header h1 {
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 }
 
-.setup-panel {
-    padding: 20px;
-    background-color: var(--light-bg);
-    border-bottom: 1px solid var(--border-color);
-}
-
 .bot-config {
     display: flex;
     gap: 20px;
@@ -233,26 +274,15 @@ textarea {
     resize: vertical;
 }
 
-.conversation-container {
-    flex: 1;
-    padding: 20px;
-    overflow-y: auto;
-    max-height: calc(100vh - 400px);
-}
-
-.conversation {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-}
-
 .message {
-    max-width: 80%;
-    padding: 15px;
+    max-width: 85%;
+    padding: 12px;
     border-radius: 10px;
     line-height: 1.5;
     position: relative;
     animation: fadeIn 0.3s ease-in-out;
+    word-break: break-word;  /* 確保長單詞也能換行 */
+    overflow-wrap: break-word;  /* 現代瀏覽器的換行支持 */
 }
 
 @keyframes fadeIn {
@@ -284,18 +314,25 @@ textarea {
 
 .message-content {
     white-space: pre-wrap;
+    overflow-wrap: break-word;  /* 確保內容不會溢出 */
+    word-break: break-word;
 }
 
 .status-bar {
     background-color: var(--dark-bg);
     color: var(--light-text);
-    padding: 10px 20px;
+    padding: 8px 15px;  /* 減少padding */
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-top: 20px;
-    border-radius: 5px;
+    margin-top: 0;  /* 移除margin */
+    border-radius: 0;  /* 移除圓角 */
     box-shadow: var(--shadow);
+    position: fixed;
+    bottom: 0;
+    left: var(--sidebar-width);
+    right: 0;
+    z-index: 100;
 }
 
 .connection-status {
@@ -407,7 +444,118 @@ textarea {
     gap: 10px;
 }
 
+.token-info-panel {
+    background-color: white;
+    border-radius: 8px;
+    padding: 15px;
+    margin-top: 20px;
+    box-shadow: var(--shadow);
+}
+
+.token-info-panel h3 {
+    margin-top: 0;
+    color: var(--primary-color);
+    font-size: 1.2rem;
+    margin-bottom: 15px;
+}
+
+.token-stats {
+    font-size: 0.95rem;
+}
+
+.stat-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.stat-label {
+    font-weight: bold;
+}
+
+.stat-value {
+    font-family: monospace;
+    font-size: 1.1rem;
+}
+
+.token-stats hr {
+    border: none;
+    border-top: 1px solid var(--border-color);
+    margin: 15px 0;
+}
+
+.stat-breakdown {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+}
+
+.bot-stat {
+    flex: 1;
+    border-radius: 5px;
+    padding: 10px;
+    background-color: #f5f8fa;
+}
+
+.bot-stat h4 {
+    margin: 0 0 10px 0;
+    font-size: 1rem;
+    color: var(--bot1-color);
+}
+
+.bot-stat:last-child h4 {
+    color: var(--bot2-color);
+}
+
+.stat-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+    font-size: 0.9rem;
+}
+
+.token-cost-info {
+    margin-top: 15px;
+    background-color: #f5f8fa;
+    padding: 15px;
+    border-radius: 8px;
+}
+
+.token-cost-info h3 {
+    margin-top: 0;
+    color: var(--primary-color);
+    font-size: 1.1rem;
+}
+
+.token-cost-grid {
+    font-size: 0.95rem;
+}
+
+.token-cost-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+}
+
 /* Responsive layout */
+@media (max-width: 1200px) {
+    .split-container {
+        flex-direction: column;
+        height: calc(100vh - 120px);  /* 適應較小的視窗 */
+    }
+    
+    .setup-panel,
+    .conversation-container {
+        width: 100%;
+        max-height: 50vh;  /* 確保每個區域都可見 */
+    }
+    
+    .setup-panel {
+        border-right: none;
+        border-bottom: 1px solid var(--border-color);
+    }
+}
+
 @media (max-width: 768px) {
     .app-container {
         flex-direction: column;
@@ -419,13 +567,20 @@ textarea {
         position: relative;
         border-right: none;
         border-bottom: 1px solid var(--border-color);
+        max-height: 30vh;  /* 限制高度 */
     }
 
-    .container {
+    .main-content {
         margin-left: 0;
         width: 100%;
+        height: auto;
     }
-
+    
+    .status-bar {
+        left: 0;
+        bottom: 0;
+    }
+    
     .bot-config {
         flex-direction: column;
     }

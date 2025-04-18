@@ -34,6 +34,20 @@ conversation_active = False
 conversation_thread = None
 conversation_id = None
 
+# Token pricing per 1000 tokens in USD (as of 2023)
+MODEL_PRICES = {
+    # GPT-4 models
+    'gpt-4o': {'input': 5.0, 'output': 15.0},       # GPT-4o input/output costs
+    'gpt-4-turbo': {'input': 10.0, 'output': 30.0}, # GPT-4 Turbo input/output costs
+    'gpt-4': {'input': 30.0, 'output': 60.0},       # GPT-4 input/output costs
+    
+    # GPT-3.5 models
+    'gpt-3.5-turbo': {'input': 0.5, 'output': 1.5}, # GPT-3.5 Turbo input/output costs
+}
+
+# USD to TWD conversion rate (example rate, should be updated periodically)
+USD_TO_TWD = 32.0  # 1 USD = 32 TWD (approximate)
+
 # Available models
 available_models = [
     "gpt-4o",
@@ -62,8 +76,20 @@ def get_conversation(conv_id):
     conversation = db_manager.get_conversation_by_id(conv_id)
     if conversation:
         messages = db_manager.get_messages_by_conversation_id(conv_id)
-        return jsonify({"conversation": conversation, "messages": messages})
+        token_stats = db_manager.get_conversation_token_stats(conv_id)
+        return jsonify({
+            "conversation": conversation, 
+            "messages": messages,
+            "token_stats": token_stats
+        })
     return jsonify({"error": "Conversation not found"}), 404
+
+@app.route('/api/conversation/<int:conv_id>/token_stats', methods=['GET'])
+def get_conversation_token_stats(conv_id):
+    token_stats = db_manager.get_conversation_token_stats(conv_id)
+    if token_stats:
+        return jsonify({"token_stats": token_stats})
+    return jsonify({"error": "Conversation not found or no token data available"}), 404
 
 @app.route('/api/conversation/<int:conv_id>', methods=['DELETE'])
 def delete_conversation(conv_id):
@@ -77,6 +103,7 @@ def export_conversation(conv_id):
     format_type = request.args.get('format', 'csv')
     conversation = db_manager.get_conversation_by_id(conv_id)
     messages = db_manager.get_messages_by_conversation_id(conv_id)
+    token_stats = db_manager.get_conversation_token_stats(conv_id)
     
     if not conversation:
         return jsonify({"error": "Conversation not found"}), 404
@@ -87,9 +114,24 @@ def export_conversation(conv_id):
     if format_type == 'csv':
         output = StringIO()
         writer = csv.writer(output)
-        writer.writerow(['Timestamp', 'Bot', 'Message'])
+        writer.writerow(['Timestamp', 'Bot', 'Message', 'Prompt Tokens', 'Completion Tokens', 'Total Tokens', 'Cost (TWD)'])
         for msg in messages:
-            writer.writerow([msg['timestamp'], msg['bot_name'], msg['content']])
+            writer.writerow([
+                msg['timestamp'], 
+                msg['bot_name'], 
+                msg['content'],
+                msg.get('prompt_tokens', 0),
+                msg.get('completion_tokens', 0),
+                msg.get('total_tokens', 0),
+                f"NT$ {msg.get('cost', 0):.2f}"
+            ])
+        
+        # Add token summary
+        if token_stats:
+            writer.writerow([])
+            writer.writerow(['Token Summary'])
+            writer.writerow(['Total Tokens', token_stats['total_tokens']])
+            writer.writerow(['Total Cost (TWD)', f"NT$ {token_stats['total_cost']:.2f}"])
         
         response = app.response_class(
             response=output.getvalue(),
@@ -101,7 +143,17 @@ def export_conversation(conv_id):
     elif format_type == 'txt':
         output = ""
         for msg in messages:
-            output += f"[{msg['timestamp']}] {msg['bot_name']}: {msg['content']}\n\n"
+            output += f"[{msg['timestamp']}] {msg['bot_name']}: {msg['content']}\n"
+            if 'total_tokens' in msg and msg['total_tokens'] > 0:
+                output += f"Tokens: {msg.get('total_tokens', 0)} (Prompt: {msg.get('prompt_tokens', 0)}, Completion: {msg.get('completion_tokens', 0)})\n"
+                output += f"Cost: NT$ {msg.get('cost', 0):.2f}\n"
+            output += "\n"
+        
+        # Add token summary
+        if token_stats:
+            output += "\n--- Token Summary ---\n"
+            output += f"Total Tokens: {token_stats['total_tokens']}\n"
+            output += f"Total Cost: NT$ {token_stats['total_cost']:.2f}\n"
         
         response = app.response_class(
             response=output,
@@ -111,6 +163,21 @@ def export_conversation(conv_id):
         return response
     
     return jsonify({"error": "Invalid format specified"}), 400
+
+# Helper function to calculate token cost
+def calculate_cost(model, prompt_tokens, completion_tokens):
+    if model not in MODEL_PRICES:
+        # Use GPT-3.5-turbo pricing as fallback
+        model = 'gpt-3.5-turbo'
+    
+    # Calculate cost in USD
+    input_cost = (prompt_tokens / 1000) * MODEL_PRICES[model]['input']
+    output_cost = (completion_tokens / 1000) * MODEL_PRICES[model]['output']
+    
+    # Convert to TWD
+    cost_twd = (input_cost + output_cost) * USD_TO_TWD
+    
+    return cost_twd
 
 # Socket events
 @socketio.on('connect')
@@ -214,15 +281,21 @@ def run_conversation(
     current_message = initial_message
     current_bot = "bot1"
     
-    # Add initial message to database
-    db_manager.add_message(conv_id, bot1_name, current_message)
+    # Add initial message to database with zero tokens (it's not from API)
+    db_manager.add_message_with_tokens(conv_id, bot1_name, current_message, 0, 0, 0)
     
     # Emit initial message to frontend
     socketio.emit('new_message', {
         'bot': bot1_name,
         'message': current_message,
-        'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        'tokens': 0,
+        'cost': 0
     })
+    
+    # Emit token stats update
+    token_stats = db_manager.get_conversation_token_stats(conv_id)
+    socketio.emit('token_stats_update', token_stats)
     
     # Main conversation loop
     while conversation_active:
@@ -247,8 +320,14 @@ def run_conversation(
                 max_tokens=1000
             )
             
-            # Extract response text
+            # Extract response text and token usage
             reply = response.choices[0].message.content
+            prompt_tokens = response.usage.prompt_tokens
+            completion_tokens = response.usage.completion_tokens
+            total_tokens = response.usage.total_tokens
+            
+            # Calculate cost
+            cost = calculate_cost(responding_model, prompt_tokens, completion_tokens)
             
             # Update conversation history
             if current_bot == "bot1":
@@ -258,15 +337,30 @@ def run_conversation(
                 bot1_messages.append({"role": "user", "content": current_message})
                 bot1_messages.append({"role": "assistant", "content": reply})
             
-            # Store message in database
-            db_manager.add_message(conv_id, responding_bot, reply)
+            # Store message in database with token information
+            db_manager.add_message_with_tokens(
+                conv_id, 
+                responding_bot, 
+                reply, 
+                prompt_tokens, 
+                completion_tokens, 
+                cost
+            )
             
             # Emit message to frontend
             socketio.emit('new_message', {
                 'bot': responding_bot,
                 'message': reply,
-                'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                'prompt_tokens': prompt_tokens,
+                'completion_tokens': completion_tokens,
+                'total_tokens': total_tokens,
+                'cost': cost
             })
+            
+            # Emit updated token stats
+            token_stats = db_manager.get_conversation_token_stats(conv_id)
+            socketio.emit('token_stats_update', token_stats)
             
             # Update current message and bot for next iteration
             current_message = reply
