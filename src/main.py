@@ -488,9 +488,19 @@ def run_conversation(
     
     print(f"啟動對話 ID:{conv_id}, 初始訊息:{initial_message[:20]}...")  # 調試日誌
     
-    # Initialize conversation history for each bot
-    bot1_messages = [{"role": "system", "content": bot1_system_prompt}]
-    bot2_messages = [{"role": "system", "content": bot2_system_prompt}]
+    # Initialize conversation history for each bot - different handling based on model
+    # o1-mini doesn't support system messages, so we need to use a different approach
+    if bot1_model == "o1-mini":
+        # For o1-mini, we'll prepend the system prompt to the first user message
+        bot1_messages = []  # No system message for o1-mini
+    else:
+        bot1_messages = [{"role": "system", "content": bot1_system_prompt}]
+        
+    if bot2_model == "o1-mini":
+        # For o1-mini, we'll prepend the system prompt to the first user message
+        bot2_messages = []  # No system message for o1-mini
+    else:
+        bot2_messages = [{"role": "system", "content": bot2_system_prompt}]
     
     # Start with initial message from Bot 1
     current_message = initial_message
@@ -528,12 +538,30 @@ def run_conversation(
             if current_bot == "bot1":
                 responding_bot = bot2_name
                 responding_model = bot2_model
-                messages = bot2_messages + [{"role": "user", "content": current_message}]
+                
+                # Special handling for o1-mini model
+                if responding_model == "o1-mini":
+                    # For o1-mini we need to prepend the system prompt to the user message
+                    system_prompt_prefix = f"{bot2_system_prompt}\n\n"
+                    enhanced_message = f"{system_prompt_prefix}User message: {current_message}"
+                    messages = [{"role": "user", "content": enhanced_message}]
+                else:
+                    messages = bot2_messages + [{"role": "user", "content": current_message}]
+                
                 next_bot = "bot2"
             else:
                 responding_bot = bot1_name
                 responding_model = bot1_model
-                messages = bot1_messages + [{"role": "user", "content": current_message}]
+                
+                # Special handling for o1-mini model
+                if responding_model == "o1-mini":
+                    # For o1-mini we need to prepend the system prompt to the user message
+                    system_prompt_prefix = f"{bot1_system_prompt}\n\n"
+                    enhanced_message = f"{system_prompt_prefix}User message: {current_message}"
+                    messages = [{"role": "user", "content": enhanced_message}]
+                else:
+                    messages = bot1_messages + [{"role": "user", "content": current_message}]
+                
                 next_bot = "bot1"
             
             print(f"請求 {responding_bot} 使用 {responding_model} 回應...")  # 調試日誌
