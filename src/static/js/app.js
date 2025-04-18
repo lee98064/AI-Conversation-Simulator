@@ -39,6 +39,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const bot2SystemPrompt = document.getElementById('bot2SystemPrompt');
     const initialMessage = document.getElementById('initialMessage');
     
+    // Token stats elements
+    const totalTokensElement = document.getElementById('totalTokens');
+    const totalCostElement = document.getElementById('totalCost');
+    const bot1TokensElement = document.getElementById('bot1Tokens');
+    const bot1CostElement = document.getElementById('bot1Cost');
+    const bot1StatsNameElement = document.getElementById('bot1StatsName');
+    const bot2TokensElement = document.getElementById('bot2Tokens');
+    const bot2CostElement = document.getElementById('bot2Cost');
+    const bot2StatsNameElement = document.getElementById('bot2StatsName');
+    const modalTotalTokensElement = document.getElementById('modalTotalTokens');
+    const modalTotalCostElement = document.getElementById('modalTotalCost');
+    
     // Load conversations on page load
     loadConversations();
     
@@ -62,6 +74,10 @@ document.addEventListener('DOMContentLoaded', () => {
     socket.on('new_message', (data) => {
         addMessage(data.bot, data.message, data.timestamp);
         scrollToBottom();
+    });
+    
+    socket.on('token_stats_update', (data) => {
+        updateTokenStats(data);
     });
     
     socket.on('error', (data) => {
@@ -141,6 +157,9 @@ document.addEventListener('DOMContentLoaded', () => {
         modalBot2Model.textContent = conversation.bot2_model;
         modalBot2SystemPrompt.textContent = conversation.bot2_system_prompt;
         
+        // Update token stats in modal
+        updateModalTokenStats(conversation);
+        
         modal.style.display = 'block';
     }
     
@@ -183,6 +202,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     data.messages.forEach(message => {
                         addMessage(message.bot_name, message.content, message.timestamp);
                     });
+                    
+                    // Update token stats if available
+                    if (data.token_stats) {
+                        updateTokenStats(data.token_stats);
+                    }
                     
                     scrollToBottom();
                     activeConversationId = conversationId;
@@ -381,5 +405,46 @@ document.addEventListener('DOMContentLoaded', () => {
     function scrollToBottom() {
         const container = document.querySelector('.conversation-container');
         container.scrollTop = container.scrollHeight;
+    }
+
+    // Update token stats in the UI
+    function updateTokenStats(data) {
+        if (!data) return;
+        
+        // Update total tokens and cost
+        totalTokensElement.textContent = data.total_tokens || 0;
+        totalCostElement.textContent = `NT$ ${(data.total_cost || 0).toFixed(2)}`;
+        
+        // Update bot specific stats
+        if (data.bot_stats) {
+            const botNames = Object.keys(data.bot_stats);
+            
+            if (botNames.length > 0) {
+                const firstBotName = botNames[0];
+                const firstBotStats = data.bot_stats[firstBotName];
+                bot1StatsNameElement.textContent = firstBotName;
+                bot1TokensElement.textContent = firstBotStats.total_tokens || 0;
+                bot1CostElement.textContent = `NT$ ${(firstBotStats.cost || 0).toFixed(2)}`;
+            }
+            
+            if (botNames.length > 1) {
+                const secondBotName = botNames[1];
+                const secondBotStats = data.bot_stats[secondBotName];
+                bot2StatsNameElement.textContent = secondBotName;
+                bot2TokensElement.textContent = secondBotStats.total_tokens || 0;
+                bot2CostElement.textContent = `NT$ ${(secondBotStats.cost || 0).toFixed(2)}`;
+            }
+        }
+    }
+
+    // Update token stats in the modal
+    function updateModalTokenStats(conversation) {
+        if (conversation && conversation.total_tokens !== undefined) {
+            modalTotalTokensElement.textContent = conversation.total_tokens;
+            modalTotalCostElement.textContent = `NT$ ${parseFloat(conversation.total_cost || 0).toFixed(2)}`;
+        } else {
+            modalTotalTokensElement.textContent = '0';
+            modalTotalCostElement.textContent = 'NT$ 0.00';
+        }
     }
 });

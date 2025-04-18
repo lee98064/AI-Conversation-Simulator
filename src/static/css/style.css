@@ -159,7 +159,7 @@ body {
 .conversation {
     display: flex;
     flex-direction: column;
-    gap: 15px;
+    gap: 20px; /* 增加間隔，讓對話不會黏在一起 */
     width: 100%;
     word-wrap: break-word;  /* 確保長文字換行 */
 }
@@ -275,14 +275,15 @@ textarea {
 }
 
 .message {
-    max-width: 85%;
-    padding: 12px;
-    border-radius: 10px;
+    max-width: 80%;
+    padding: 15px;
+    border-radius: 16px;
     line-height: 1.5;
     position: relative;
     animation: fadeIn 0.3s ease-in-out;
     word-break: break-word;  /* 確保長單詞也能換行 */
     overflow-wrap: break-word;  /* 現代瀏覽器的換行支持 */
+    margin-bottom: 5px; /* 增加額外邊距 */
 }
 
 @keyframes fadeIn {
@@ -294,14 +295,16 @@ textarea {
     align-self: flex-start;
     background-color: var(--bot1-color);
     color: var(--light-text);
-    border-bottom-left-radius: 2px;
+    border-bottom-left-radius: 4px;
+    margin-right: auto; /* 確保左側對齊 */
 }
 
 .message.bot2 {
     align-self: flex-end;
     background-color: var(--bot2-color);
     color: var(--light-text);
-    border-bottom-right-radius: 2px;
+    border-bottom-right-radius: 4px;
+    margin-left: auto; /* 確保右側對齊 */
 }
 
 .message-header {
