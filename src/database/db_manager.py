@@ -149,18 +149,28 @@ class DatabaseManager:
         
         bot_stats = {}
         for row in cursor.fetchall():
+            # 计算美元价格（从新台币反算）
+            cost_twd = row['cost']
+            cost_usd = cost_twd / 31.5  # 使用TokenConfig.USD_TO_TWD常量的值
+            
             bot_stats[row['bot_name']] = {
                 'prompt_tokens': row['prompt_tokens'],
                 'completion_tokens': row['completion_tokens'],
                 'total_tokens': row['total_tokens'],
-                'cost': row['cost']
+                'cost': cost_twd,
+                'cost_usd': cost_usd  # 添加美元成本
             }
         
         conn.close()
         
+        # 计算总的美元成本
+        total_cost_twd = conv_row['total_cost']
+        total_cost_usd = total_cost_twd / 31.5  # 使用TokenConfig.USD_TO_TWD常量的值
+        
         return {
             'total_tokens': conv_row['total_tokens'],
-            'total_cost': conv_row['total_cost'],
+            'total_cost': total_cost_twd,
+            'total_cost_usd': total_cost_usd,  # 添加总美元成本
             'bot_stats': bot_stats
         }
 

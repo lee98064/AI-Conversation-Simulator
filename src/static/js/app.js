@@ -271,13 +271,13 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Reset token statistics display
         totalTokensElement.textContent = '0';
-        totalCostElement.textContent = 'NT$ 0.00';
+        totalCostElement.textContent = 'NT$ 0.00 ($ 0.0000)';
         bot1StatsNameElement.textContent = 'Bot 1';
         bot1TokensElement.textContent = '0';
-        bot1CostElement.textContent = 'NT$ 0.00';
+        bot1CostElement.textContent = 'NT$ 0.00 ($ 0.0000)';
         bot2StatsNameElement.textContent = 'Bot 2';
         bot2TokensElement.textContent = '0';
-        bot2CostElement.textContent = 'NT$ 0.00';
+        bot2CostElement.textContent = 'NT$ 0.00 ($ 0.0000)';
         
         // Reset bot configuration to defaults if needed
         // bot1Name.value = 'Bot 1';
@@ -453,7 +453,11 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Update total tokens and cost
         totalTokensElement.textContent = data.total_tokens || 0;
-        totalCostElement.textContent = `NT$ ${(data.total_cost || 0).toFixed(2)}`;
+        
+        // 显示新台币和美元价格
+        const totalTwd = data.total_cost || 0;
+        const totalUsd = data.total_cost_usd || (totalTwd / 31.5); // 如果后端没有提供，则使用估算值
+        totalCostElement.textContent = `NT$ ${totalTwd.toFixed(2)} ($ ${totalUsd.toFixed(4)})`;
         
         // Update bot specific stats
         if (data.bot_stats) {
@@ -464,7 +468,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const firstBotStats = data.bot_stats[firstBotName];
                 bot1StatsNameElement.textContent = firstBotName;
                 bot1TokensElement.textContent = firstBotStats.total_tokens || 0;
-                bot1CostElement.textContent = `NT$ ${(firstBotStats.cost || 0).toFixed(2)}`;
+                
+                const bot1Twd = firstBotStats.cost || 0;
+                const bot1Usd = firstBotStats.cost_usd || (bot1Twd / 31.5);
+                bot1CostElement.textContent = `NT$ ${bot1Twd.toFixed(2)} ($ ${bot1Usd.toFixed(4)})`;
             }
             
             if (botNames.length > 1) {
@@ -472,7 +479,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const secondBotStats = data.bot_stats[secondBotName];
                 bot2StatsNameElement.textContent = secondBotName;
                 bot2TokensElement.textContent = secondBotStats.total_tokens || 0;
-                bot2CostElement.textContent = `NT$ ${(secondBotStats.cost || 0).toFixed(2)}`;
+                
+                const bot2Twd = secondBotStats.cost || 0;
+                const bot2Usd = secondBotStats.cost_usd || (bot2Twd / 31.5);
+                bot2CostElement.textContent = `NT$ ${bot2Twd.toFixed(2)} ($ ${bot2Usd.toFixed(4)})`;
             }
         }
     }
@@ -481,10 +491,14 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateModalTokenStats(conversation) {
         if (conversation && conversation.total_tokens !== undefined) {
             modalTotalTokensElement.textContent = conversation.total_tokens;
-            modalTotalCostElement.textContent = `NT$ ${parseFloat(conversation.total_cost || 0).toFixed(2)}`;
+            
+            // 计算美元价格（如果有新台币价格但没有美元价格）
+            const totalTwd = parseFloat(conversation.total_cost || 0);
+            const totalUsd = conversation.total_cost_usd || (totalTwd / 31.5);
+            modalTotalCostElement.textContent = `NT$ ${totalTwd.toFixed(2)} ($ ${totalUsd.toFixed(4)})`;
         } else {
             modalTotalTokensElement.textContent = '0';
-            modalTotalCostElement.textContent = 'NT$ 0.00';
+            modalTotalCostElement.textContent = 'NT$ 0.00 ($ 0.0000)';
         }
     }
 });

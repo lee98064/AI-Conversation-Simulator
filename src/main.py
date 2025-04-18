@@ -199,8 +199,8 @@ class CostCalculator:
     def __init__(self):
         self.model_cost_manager = ModelCostManager()
     
-    def calculate_cost(self, model: str, prompt_tokens: int, completion_tokens: int) -> Decimal:
-        """计算使用模型的成本"""
+    def calculate_cost(self, model: str, prompt_tokens: int, completion_tokens: int) -> (Decimal, Decimal):
+        """计算使用模型的成本，返回美元和新台币价格"""
         model_pricing_data = self.model_cost_manager.get_model_data(model)
         
         # 获取每个token的输入输出成本
@@ -216,9 +216,10 @@ class CostCalculator:
         total_cost_twd = total_cost_usd * Decimal(TokenConfig.USD_TO_TWD)
         
         # 四舍五入到指定精度
+        total_cost_usd = total_cost_usd.quantize(Decimal(TokenConfig.DECIMALS), rounding=ROUND_HALF_UP)
         total_cost_twd = total_cost_twd.quantize(Decimal(TokenConfig.DECIMALS), rounding=ROUND_HALF_UP)
         
-        return total_cost_twd
+        return total_cost_usd, total_cost_twd
 
 # 初始化成本计算器
 cost_calculator = CostCalculator()
@@ -547,7 +548,7 @@ def run_conversation(
             print(f"{responding_bot} 回應 ({total_tokens} tokens): {reply[:30]}...")  # 調試日誌
             
             # Calculate cost
-            cost = cost_calculator.calculate_cost(responding_model, prompt_tokens, completion_tokens)
+            cost_usd, cost_twd = cost_calculator.calculate_cost(responding_model, prompt_tokens, completion_tokens)
             
             # Update conversation history
             if current_bot == "bot1":
@@ -564,7 +565,7 @@ def run_conversation(
                 reply, 
                 prompt_tokens, 
                 completion_tokens, 
-                float(cost)  # Convert Decimal to float for SQLite compatibility
+                float(cost_twd)  # Convert Decimal to float for SQLite compatibility
             )
             
             # 構造消息事件數據
@@ -575,7 +576,8 @@ def run_conversation(
                 'prompt_tokens': prompt_tokens,
                 'completion_tokens': completion_tokens,
                 'total_tokens': total_tokens,
-                'cost': float(cost)  # Convert Decimal to float for JSON serialization
+                'cost_usd': float(cost_usd),  # 添加美元價格
+                'cost': float(cost_twd)  # 新台幣價格
             }
             
             # 確保事件數據不包含無法JSON序列化的內容
