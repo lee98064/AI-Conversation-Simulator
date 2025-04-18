@@ -29,6 +29,7 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 # Initialize Flask app
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv("SECRET_KEY", "default_secret_key")
+print(os.getenv("OPENAI_API_KEY"))
 CORS(app)
 # 更新 Socket.IO 配置，解決即時更新問題
 socketio = SocketIO(app, 
@@ -65,7 +66,9 @@ available_models = [
     "gpt-4o",
     "gpt-4-turbo",
     "gpt-4",
-    "gpt-3.5-turbo"
+    "gpt-3.5-turbo",
+    "o1",
+    "o1-mini"
 ]
 
 # Helper function to get encoding for a model
@@ -531,13 +534,21 @@ def run_conversation(
             
             print(f"請求 {responding_bot} 使用 {responding_model} 回應...")  # 調試日誌
             
-            # Get response from OpenAI API
-            response = openai.chat.completions.create(
-                model=responding_model,
-                messages=messages,
-                temperature=0.7,
-                max_tokens=1000
-            )
+            # 检查是否为o1系列模型，它们使用不同的参数
+            if responding_model.startswith("o1"):
+                # o1模型不支持temperature和max_tokens参数
+                response = openai.chat.completions.create(
+                    model=responding_model,
+                    messages=messages,
+                    max_completion_tokens=1000
+                )
+            else:
+                response = openai.chat.completions.create(
+                    model=responding_model,
+                    messages=messages,
+                    temperature=0.7,
+                    max_tokens=1000
+                )
             
             # Extract response text and token usage
             reply = response.choices[0].message.content
