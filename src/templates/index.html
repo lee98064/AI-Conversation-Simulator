@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Conversation</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>AI 對話模擬器</h1>
+            <div class="controls">
+                <button id="startBtn" class="btn primary"><i class="fas fa-play"></i> 開始</button>
+                <button id="pauseBtn" class="btn secondary" disabled><i class="fas fa-pause"></i> 暫停</button>
+                <button id="exportCSVBtn" class="btn secondary"><i class="fas fa-file-csv"></i> 匯出 CSV</button>
+                <button id="exportTXTBtn" class="btn secondary"><i class="fas fa-file-alt"></i> 匯出 TXT</button>
+            </div>
+        </header>
+        
+        <div class="setup-panel">
+            <div class="bot-config">
+                <div class="bot-config-card">
+                    <h2>Bot 1 設定</h2>
+                    <div class="form-group">
+                        <label for="bot1Name">名稱</label>
+                        <input type="text" id="bot1Name" value="Bot 1">
+                    </div>
+                    <div class="form-group">
+                        <label for="bot1Model">模型</label>
+                        <select id="bot1Model">
+                            {% for model in models %}
+                            <option value="{{ model }}">{{ model }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="bot1SystemPrompt">系統提示詞</label>
+                        <textarea id="bot1SystemPrompt" rows="5">您是一個有用的AI助手。請用中文回答問題。</textarea>
+                    </div>
+                </div>
+                
+                <div class="bot-config-card">
+                    <h2>Bot 2 設定</h2>
+                    <div class="form-group">
+                        <label for="bot2Name">名稱</label>
+                        <input type="text" id="bot2Name" value="Bot 2">
+                    </div>
+                    <div class="form-group">
+                        <label for="bot2Model">模型</label>
+                        <select id="bot2Model">
+                            {% for model in models %}
+                            <option value="{{ model }}">{{ model }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="bot2SystemPrompt">系統提示詞</label>
+                        <textarea id="bot2SystemPrompt" rows="5">您是一個有用的AI助手，擅長問有深度的問題。請用中文回答。</textarea>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="initial-message-section">
+                <div class="form-group">
+                    <label for="initialMessage">初始訊息</label>
+                    <textarea id="initialMessage" rows="3">你好！讓我們開始對話吧。</textarea>
+                </div>
+            </div>
+        </div>
+        
+        <div class="conversation-container">
+            <div id="conversation" class="conversation"></div>
+        </div>
+    </div>
+    
+    <div class="status-bar">
+        <div id="statusMessage" class="status-message">就緒</div>
+        <div class="connection-status">
+            <span id="connectionStatus">未連線</span>
+            <span id="connectionIndicator" class="connection-indicator disconnected"></span>
+        </div>
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.min.js"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
