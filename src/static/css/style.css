@@ -135,7 +135,7 @@ body {
 
 .split-container {
     display: flex;
-    height: calc(100vh - 80px);  /* 減少高度，給header和status bar預留空間 */
+    height: calc(100vh - 110px);  /* 增加底部間距，為狀態欄留出空間 */
     overflow: hidden;
 }
 
@@ -154,6 +154,7 @@ body {
     overflow-x: hidden;  /* 防止水平滾動 */
     padding: 15px;  /* 減少內邊距 */
     height: 100%;
+    padding-bottom: 40px; /* 增加底部padding，確保內容不被狀態欄擋住 */
 }
 
 .conversation {
@@ -324,18 +325,19 @@ textarea {
 .status-bar {
     background-color: var(--dark-bg);
     color: var(--light-text);
-    padding: 8px 15px;  /* 減少padding */
+    padding: 8px 15px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-top: 0;  /* 移除margin */
-    border-radius: 0;  /* 移除圓角 */
+    margin-top: 0;
+    border-radius: 0;
     box-shadow: var(--shadow);
     position: fixed;
     bottom: 0;
     left: var(--sidebar-width);
     right: 0;
     z-index: 100;
+    height: 30px; /* 固定高度 */
 }
 
 .connection-status {

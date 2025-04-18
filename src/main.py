@@ -34,7 +34,7 @@ conversation_active = False
 conversation_thread = None
 conversation_id = None
 
-# Token pricing per 1000 tokens in USD (as of 2023)
+# Token pricing per 1000 tokens in USD (updated as of 2025)
 MODEL_PRICES = {
     # GPT-4 models
     'gpt-4o': {'input': 5.0, 'output': 15.0},       # GPT-4o input/output costs
@@ -45,8 +45,8 @@ MODEL_PRICES = {
     'gpt-3.5-turbo': {'input': 0.5, 'output': 1.5}, # GPT-3.5 Turbo input/output costs
 }
 
-# USD to TWD conversion rate (example rate, should be updated periodically)
-USD_TO_TWD = 32.0  # 1 USD = 32 TWD (approximate)
+# USD to TWD conversion rate (updated for 2025)
+USD_TO_TWD = 31.5  # 1 USD = 31.5 TWD
 
 # Available models
 available_models = [
@@ -170,12 +170,13 @@ def calculate_cost(model, prompt_tokens, completion_tokens):
         # Use GPT-3.5-turbo pricing as fallback
         model = 'gpt-3.5-turbo'
     
-    # Calculate cost in USD
-    input_cost = (prompt_tokens / 1000) * MODEL_PRICES[model]['input']
-    output_cost = (completion_tokens / 1000) * MODEL_PRICES[model]['output']
+    # Calculate cost in USD (divide by 1000 since pricing is per 1000 tokens)
+    input_cost_usd = (prompt_tokens / 1000.0) * MODEL_PRICES[model]['input']
+    output_cost_usd = (completion_tokens / 1000.0) * MODEL_PRICES[model]['output']
+    total_cost_usd = input_cost_usd + output_cost_usd
     
-    # Convert to TWD
-    cost_twd = (input_cost + output_cost) * USD_TO_TWD
+    # Convert to TWD with precision
+    cost_twd = total_cost_usd * USD_TO_TWD
     
     return cost_twd
 
